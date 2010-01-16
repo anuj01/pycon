@@ -502,6 +502,8 @@ class NetConnect:
       self.count = 1
 # Create a new window
       self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+      wicon = self.window.render_icon(gtk.STOCK_NETWORK, gtk.ICON_SIZE_MENU)
+      gtk.window_set_default_icon(wicon)
       self.window.set_size_request(250, 150)
       self.window.set_title("Net4India  Connector")
       self.window.set_border_width(5)
