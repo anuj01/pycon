@@ -48,7 +48,7 @@ login_id = "anuj"
 passwd   = "net4india"
 mac_addr = "00-24-E8-81-C9-XX"
 # Set this for debug messages on terminal
-debug = True    # True / False
+debug = False    # True / False
 #################################################################
 
 # Global Variables
@@ -424,7 +424,7 @@ class NetConnect:
 	   global threadquit
 	   if debug : print "Connect Clicked!"
 
-	   # Wait until last thread is quit (if it is running)
+	   # Wait until last thread is quit (if it was already running)
 	   while threadquit : pass 	
 
 	   # If already connected just return
@@ -611,6 +611,7 @@ class NetConnect:
 
 #  Show Statusbar
       vbox.pack_start(self.status_bar, True, True, 0)
+      self.status_bar.push(context_id, "Status : Offline")
       self.status_bar.show()
 
 # Statusicon in notification area
