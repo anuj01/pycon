@@ -48,7 +48,7 @@ login_id = "anuj"
 passwd   = "net4india"
 mac_addr = "00-24-E8-81-C9-XX"
 # Set this for debug messages on terminal
-debug = False    # True / False
+debug = True    # True / False
 #################################################################
 
 # Global Variables
@@ -58,10 +58,10 @@ session_id = ""
 threadquit = 0
 is_connected = 0
 
-# Initilize gtk thread
+# Enable threading with gtk
 gtk.gdk.threads_init()
 
-# Function to create a connection to DNS Server
+# Function to setup a connection to DNS Server
 def make_connection():
 	global dns_server
 	global port
@@ -86,7 +86,7 @@ def make_connection():
 	return s
 
 # Function to send the command to server
-def send_command(command, from_thread):
+def send_request(request, from_thread):
         global server_response
 	global session_info
 	global is_connected
@@ -94,41 +94,42 @@ def send_command(command, from_thread):
 	server_response = "Init ##@@## NA ##@@## NA ##@@## NA ##@@## NA ##@@## NA"
 	session_info = "Init ##@@## NA ##@@## NA ##@@## NA ##@@## NA ##@@## NA"
 
-	if debug : print "I am in send_command"
-        cli_sock = make_connection()
+	if debug : print "I am in send_request"
+
+        # Setup connection to server
+	cli_sock = make_connection()
 	if not cli_sock:
-		if debug : print "send_command : cound not open socket"
+		if debug : print "send_request : cound not open socket"
 		if from_thread :
-			threadquit = 1
 			return False, "Server Unreachable"
 		message(title="Network Error", type=gtk.MESSAGE_ERROR, 
 				data="Could not connect to Server : " 
 				+ dns_server + ":" + str(port))
 		return False
 
+	# Send request to server
 	try:
-        	cli_sock.send(command)
+        	cli_sock.send(request)
 	except socket.error, err:
 		cli_sock.close()
 		cli_sock = None
-		if debug : print "send_command : Server Error : %s" % err
+		if debug : print "send_request : Server Error : %s" % err
 		if from_thread :
-			threadquit = 1
 			return False, "Server Unreachable"
 		message(title="Network Error", type=gtk.MESSAGE_ERROR, 
 				data="Could not connect to Server : " 
 				+ dns_server + ":" + str(port)
 				+ "\n Error : %s" % err)
 		return False
-
+	
+	# Get the response from server
 	try:
 		server_response = cli_sock.recv(400)
 	except socket.error, err:
 		cli_sock.close()
 		cli_sock = None
-		if debug : print "send_command : Server Error : %s" % err
+		if debug : print "send_request : Server Error : %s" % err
 		if from_thread :
-			threadquit = 1
 			return False, "Server Unreachable"
 		message(title="Network Error", type=gtk.MESSAGE_ERROR, 
 				data="Could not connect to Server : " 
@@ -136,10 +137,12 @@ def send_command(command, from_thread):
 				+ "\n Error : %s" % err)
 		return False
 
+	# Close connection
         cli_sock.close()
 
+	# Analyze server response and update status 
 	if server_response.startswith("YES") :
-		if debug : print "send_command : Server response :\n" + server_response
+		if debug : print "send_request : Server response :\n" + server_response
 		server_response +=  "##@@## NA ##@@## NA ##@@## NA ##@@## NA ##@@## NA"
 		if is_connected :
 			session_info = server_response
@@ -147,23 +150,22 @@ def send_command(command, from_thread):
 			return True, server_response.split("##@@##")[1]
 		return True
 	elif server_response.startswith("ERR") :
-		if debug : print "send_command : Server response :\n" + server_response
+		if debug : print "send_request : Server response :\n" + server_response
 		if from_thread :
 			threadquit = 1
 			return False, server_response.split("##@@##")[1]
 		message(title="Server Error", type=gtk.MESSAGE_ERROR, data=server_response.split("##@@##")[1])
 		return False
 	else :
-		if debug : print "send_command : Server response :\n" + server_response
+		if debug : print "send_request : Server response :\n" + server_response
 		server_response = "##@@## \tInvalid Service at Port Number : "	+ str(port) \
 					+ " \n Server Response : " + server_response
 		if from_thread :
-			threadquit = 1
 			return False, "Invalid Port Number : " + str(port) 
 		message(title="Network Error", type=gtk.MESSAGE_ERROR, data=server_response.split("##@@##")[1])
 		return False
 
-        return  server_response.startswith("YES")
+        return  
 
 def sig_quit(signum, frame):
 	if debug : print "I am in sig_quit", signum
@@ -174,26 +176,21 @@ def sig_quit(signum, frame):
 
 # Function to connect the internet
 def netconnect(user_name,password,mac_address):
-	if debug : print "I am in netconnect"
         global session_id
 	global server_response
 	global is_connected
+	if debug : print "I am in netconnect"
 	
-	if is_connected:
-		message(title="Connect Failed", type=gtk.MESSAGE_WARNING, data="Already Connected")
-		if debug : print "netconnect : Already Connected"
-		return True
-
         mac_auth_req = "reqType=init##@@##mac=" + mac_address + "##@@##dummy=dummy" + chr(10)
 
-        if not send_command(mac_auth_req, False):
+        if not send_request(mac_auth_req, False):
 		if debug : print "netconnect : MAC Address request not Completed " 
                 return False
         
 	login_req =   "reqType=login##@@##user=" + user_name + "##@@##password=" + password +         \
                         "##@@##macAddress=" + mac_address + "##@@##version=1, 0, 0, 6##@@##dummy=dummy" + chr(10)
 
-        if not send_command(login_req, False):
+        if not send_request(login_req, False):
 		if debug : print "netconnect : Login request not completed  " 
                 return False
 
@@ -202,19 +199,17 @@ def netconnect(user_name,password,mac_address):
 	if debug : print "netconnect : Connection Successful!"
         return True
 
-# Function to Disconnect from internet
+# Function to disconnect from internet
 def netdisconnect():
-	if debug : print "I am in netdisconnect"
         global session_id
 	global server_response
 	global is_connected
 	global session_info
-	if not is_connected:
-		message(title="Connect Failed", type=gtk.MESSAGE_WARNING, data="Already Disconnected")
-		if debug : print "netconnect : Already Disconnected"
-		return True
+	if debug : print "I am in netdisconnect"
+
         logout_req = "reqType=logout##@@##sessionID=" + session_id + "##@@##dummy=dummyone" + chr(10)
-	if not send_command(logout_req, False):
+
+	if not send_request(logout_req, False):
 		if debug : print "netdisconnect : logout request not completed " 
 		return False
 
@@ -237,34 +232,67 @@ class refresh(Thread):
 		global threadquit
 		global is_connected
 		global session_id
+
+		try_refresh = 4
+
+		# Update statusicon 
+		time.sleep(3)
+		self.nc.push_status(self.widget, self.ctx_id, "Status : Online")
+		gtk.gdk.threads_enter()
+		self.nc.icon.set_from_stock(gtk.STOCK_NETWORK)
+		gtk.gdk.threads_leave()
+
 		refresh_str = "reqType=refresh##@@##sessionID=" + session_id + "##@@##dummy=dummyone" + chr(10)
+
+		# Loop here to refresh the connection every 15 Sec.
 		while not threadquit:
 			if debug : 
 				print "I am in refresh thread", self.count
 				self.count = self.count+1
 
-			self.nc.icon.set_blinking(False)
 			time.sleep(15)
-
-			res_list =  send_command(refresh_str, True)
+			self.nc.icon.set_blinking(True)
+			
+			# Make connection refresh request
+			res_list =  send_request(refresh_str, True)
 			if not res_list[0]:
 				if debug : print "thread : Couldn't refresh. Server Message is " + res_list[1]
+				if try_refresh:
+					gtk.gdk.threads_enter()
+					self.nc.push_status(self.widget, self.ctx_id, "Status : Refreshing - Cable Unplugged")
+					self.nc.icon.set_from_stock(gtk.STOCK_DISCONNECT)
+					gtk.gdk.threads_leave()
+					try_refresh = try_refresh - 1
+					continue
 				is_connected = 0
+				threadquit = 1
 				gtk.gdk.threads_enter()
+				self.nc.icon.set_from_stock(gtk.STOCK_DISCONNECT)
 				self.nc.push_status(self.widget, self.ctx_id, "Status : Offline - " + res_list[1])
 				gtk.gdk.threads_leave()
+			else :
+				try_refresh = 4
+				conn_status = ("Offline", "Online")[is_connected]
+				gtk.gdk.threads_enter()
+				self.nc.icon.set_from_stock(gtk.STOCK_NETWORK)
+				self.nc.icon.set_blinking(False)
+				self.nc.push_status(self.widget, self.ctx_id, "Status : %s" % conn_status)
+				gtk.gdk.threads_leave()
 
+			# Update tooltip
 			conn_status = ("Offline", "Online")[is_connected]
-
 			self.nc.icon.set_tooltip("Net4India - " + conn_status 
 					+ "\n Inbound : " + session_info.split("##@@##")[4]
 					+ "\n Outbound: " + session_info.split("##@@##")[5] )
-			self.nc.icon.set_blinking(True)
-			time.sleep(3)
 
 		self.nc.icon.set_blinking(False)
 		threadquit = 0
 		is_connected = 0
+		# Update status icon 
+		gtk.gdk.threads_enter()
+		self.nc.push_status(self.widget, self.ctx_id, "Status : Offline")
+		self.nc.icon.set_from_stock(gtk.STOCK_DISCONNECT)
+		gtk.gdk.threads_leave()
 		session_id = ""
 		if debug : print "refresh thread : Thread Quit !!! " 
 		return 
@@ -392,21 +420,36 @@ class NetConnect:
 
 # Callback for Connect button
    def connect(self, widget, ctx_id, data):
-	   if debug : print "Connect Clicked!"
            global is_connected
 	   global threadquit
+	   if debug : print "Connect Clicked!"
+
+	   # Wait until last thread is quit (if it is running)
+	   while threadquit : pass 	
+
+	   # If already connected just return
+	   if is_connected:
+		if debug : print "connect : Already Connected"
+		message(title="Connected", type=gtk.MESSAGE_WARNING, data="Already Connected")
+		self.push_status(widget, ctx_id, "Status : Online")
+		return 
+
+	   # Get the credentials
            user_name = self.uentry.get_text()
            password = self.pentry.get_text()
            mac_address = self.mentry.get_text()
+
+	   # Make connect request
 	   if netconnect(user_name,password,mac_address):
-		   self.push_status(widget, ctx_id, "Status : Online")
-		   is_connected = 1
-		   threadquit = 0
+		   self.push_status(widget, ctx_id, "Status : Connecting...")
 		   ref_thread = refresh(self, widget, ctx_id, 1)
 		   ref_thread.start() 
+		   is_connected = 1
+		   self.icon.set_from_stock(gtk.STOCK_CONNECT)
            else:
 		   self.push_status(widget, ctx_id, "Status : Error in Connection")
            
+	   # Update tooltip
 	   conn_status = ("Offline", "Online")[is_connected]
 	   self.icon.set_tooltip("Net4India - " + conn_status 
 			   + "\n Inbound : " + session_info.split("##@@##")[4]
@@ -415,22 +458,34 @@ class NetConnect:
 
 # Callback for Disconnect button
    def disconnect(self, widget, ctx_id, data):
-	   if debug : print "Disconnect Clicked"
 	   global threadquit
 	   global session_id 
 	   global is_connected
+	   if debug : print "Disconnect Clicked"
+
+	   # If already disconnected just return
+	   if not is_connected:
+		if debug : print "disconnect : Already Disconnected"
+		message(title="Disconnected", type=gtk.MESSAGE_WARNING, data="Already Disconnected")
+		self.push_status(widget, ctx_id, "Status : Offline")
+		return 
+
+	   # Make disconnect request
 	   if netdisconnect():
+	   	   threadquit = 1
 		   is_connected = 0
 		   session_id = ""
-		   self.push_status(widget, ctx_id, "Status : Offline")
+		   self.push_status(widget, ctx_id, "Status : Disconnecting...")
+#		   self.icon.set_from_stock(gtk.STOCK_DISCONNECT)
 	   else:
+		   self.icon.set_from_stock(gtk.STOCK_DISCONNECT)
 		   self.push_status(widget, ctx_id, "Status : Error in Disconnection")
 	   
+	   # Update tooltip
            conn_status = ("Offline", "Online")[is_connected]
 	   self.icon.set_tooltip("Net4India - " + conn_status 
 			   + "\n Inbound : " + session_info.split("##@@##")[4]
 			   + "\n Outbound: " + session_info.split("##@@##")[5] )
-	   threadquit = 1
 	   return
 
 # Callback for window destroy event
@@ -559,7 +614,7 @@ class NetConnect:
       self.status_bar.show()
 
 # Statusicon in notification area
-      self.icon = gtk.status_icon_new_from_stock(gtk.STOCK_NETWORK)
+      self.icon = gtk.status_icon_new_from_stock(gtk.STOCK_DISCONNECT)
       self.icon.set_tooltip("Net4India Connector")
       self.icon.connect("popup-menu",self.on_right_click)
       self.icon.connect("activate",self.on_left_click)
