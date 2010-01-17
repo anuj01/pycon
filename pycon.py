@@ -23,7 +23,7 @@
 
 import pygtk
 pygtk.require('2.0')
-import  gtk
+import gtk
 import sys, time, os, signal, socket
 from threading import *
 
@@ -167,10 +167,15 @@ def send_request(request, from_thread):
 
         return  
 
+# Signal handler for Ctrl + C
 def sig_quit(signum, frame):
 	if debug : print "I am in sig_quit", signum
 	global threadquit
+	global is_connected
 	threadquit = 1
+	if is_connected:
+		netdisconnect()
+
 	if debug : print "Bye Quiting..."
 	gtk.main_quit()
 
@@ -237,8 +242,8 @@ class refresh(Thread):
 
 		# Update statusicon 
 		time.sleep(3)
-		self.nc.push_status(self.widget, self.ctx_id, "Status : Online")
 		gtk.gdk.threads_enter()
+		self.nc.push_status(self.widget, self.ctx_id, "Status : Online")
 		self.nc.icon.set_from_stock(gtk.STOCK_NETWORK)
 		gtk.gdk.threads_leave()
 
@@ -267,16 +272,16 @@ class refresh(Thread):
 				is_connected = 0
 				threadquit = 1
 				gtk.gdk.threads_enter()
-				self.nc.icon.set_from_stock(gtk.STOCK_DISCONNECT)
 				self.nc.push_status(self.widget, self.ctx_id, "Status : Offline - " + res_list[1])
+				self.nc.icon.set_from_stock(gtk.STOCK_DISCONNECT)
 				gtk.gdk.threads_leave()
 			else :
 				try_refresh = 4
 				conn_status = ("Offline", "Online")[is_connected]
 				gtk.gdk.threads_enter()
+				self.nc.push_status(self.widget, self.ctx_id, "Status : %s" % conn_status)
 				self.nc.icon.set_from_stock(gtk.STOCK_NETWORK)
 				self.nc.icon.set_blinking(False)
-				self.nc.push_status(self.widget, self.ctx_id, "Status : %s" % conn_status)
 				gtk.gdk.threads_leave()
 
 			# Update tooltip
@@ -286,14 +291,15 @@ class refresh(Thread):
 					+ "\n Outbound: " + session_info.split("##@@##")[5] )
 
 		self.nc.icon.set_blinking(False)
-		threadquit = 0
-		is_connected = 0
-		# Update status icon 
+		# Update status and status icon 
 		gtk.gdk.threads_enter()
 		self.nc.push_status(self.widget, self.ctx_id, "Status : Offline")
 		self.nc.icon.set_from_stock(gtk.STOCK_DISCONNECT)
 		gtk.gdk.threads_leave()
+		# Invalidate session id
 		session_id = ""
+		is_connected = 0
+		threadquit = 0
 		if debug : print "refresh thread : Thread Quit !!! " 
 		return 
 
@@ -379,7 +385,6 @@ def make_right_menu(self, event_button, event_time):
 	about_item = gtk.ImageMenuItem(gtk.STOCK_ABOUT, agr)
 	close_item = gtk.ImageMenuItem(gtk.STOCK_QUIT, agr)
 
-
 	menu.append(status_item)
 	menu.append(about_item)
 	menu.append(close_item)
@@ -426,15 +431,14 @@ class NetConnect:
 	   global threadquit
 	   if debug : print "Connect Clicked!"
 
-	   # Wait until last thread is quit (if it was already running)
-	   while threadquit : pass 	
-
 	   # If already connected just return
 	   if is_connected:
 		if debug : print "connect : Already Connected"
 		message(title="Connected", type=gtk.MESSAGE_WARNING, data="Already Connected")
-		self.push_status(widget, ctx_id, "Status : Online")
 		return 
+	   
+    	   # Wait until last thread is quit (if it was already running)
+	   while threadquit : pass 	
 
 	   # Get the credentials
            user_name = self.uentry.get_text()
@@ -444,12 +448,10 @@ class NetConnect:
 	   # Make connect request
 	   if netconnect(user_name,password,mac_address):
 		   self.push_status(widget, ctx_id, "Status : Connecting...")
+		   self.icon.set_from_stock(gtk.STOCK_CONNECT)
 		   ref_thread = refresh(self, widget, ctx_id, 1)
 		   ref_thread.start() 
 		   is_connected = 1
-		   self.icon.set_from_stock(gtk.STOCK_CONNECT)
-           else:
-		   self.push_status(widget, ctx_id, "Status : Error in Connection")
            
 	   # Update tooltip
 	   conn_status = ("Offline", "Online")[is_connected]
@@ -469,19 +471,12 @@ class NetConnect:
 	   if not is_connected:
 		if debug : print "disconnect : Already Disconnected"
 		message(title="Disconnected", type=gtk.MESSAGE_WARNING, data="Already Disconnected")
-		self.push_status(widget, ctx_id, "Status : Offline")
 		return 
 
 	   # Make disconnect request
 	   if netdisconnect():
 	   	   threadquit = 1
-		   is_connected = 0
-		   session_id = ""
 		   self.push_status(widget, ctx_id, "Status : Disconnecting...")
-#		   self.icon.set_from_stock(gtk.STOCK_DISCONNECT)
-	   else:
-		   self.icon.set_from_stock(gtk.STOCK_DISCONNECT)
-		   self.push_status(widget, ctx_id, "Status : Error in Disconnection")
 	   
 	   # Update tooltip
            conn_status = ("Offline", "Online")[is_connected]
@@ -502,6 +497,7 @@ class NetConnect:
       global passwd
       global mac_addr
       self.count = 1
+
 # Create a new window
       self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
       wicon = self.window.render_icon(gtk.STOCK_NETWORK, gtk.ICON_SIZE_MENU)
