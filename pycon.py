@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: iso-8859-1 -*-
+# -*- encoding: utf-8 -*-
 
 # Copyright (C) 2010 Anuj Aggarwal<anuj01@gmail.com>
 #
@@ -343,7 +343,7 @@ MA 02111-1307, USA."""
 		dialog = gtk.AboutDialog()
 		dialog.set_name("Connector")
 		dialog.set_version("0.1")
-		dialog.set_comments("Net4India Connector")
+		dialog.set_comments("Net4India Broadband Connector")
 		dialog.set_copyright(u"Copyright © 2010 Anuj Aggarwal")
 		dialog.set_website("http://anuj01.limewebs.com")
 		dialog.set_authors(authors)
