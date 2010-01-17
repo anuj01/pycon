@@ -343,6 +343,8 @@ MA 02111-1307, USA."""
 		dialog = gtk.AboutDialog()
 		dialog.set_name("Connector")
 		dialog.set_version("0.1")
+		pixbuf = dialog.render_icon(gtk.STOCK_NETWORK, gtk.ICON_SIZE_DIALOG)
+		dialog.set_logo(pixbuf)
 		dialog.set_comments("Net4India Broadband Connector")
 		dialog.set_copyright(u"Copyright © 2010 Anuj Aggarwal")
 		dialog.set_website("http://anuj01.limewebs.com")
