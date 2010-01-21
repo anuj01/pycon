@@ -25,20 +25,10 @@ import pygtk
 pygtk.require('2.0')
 import gtk
 import sys, time, os, signal, socket
+import shelve
 from threading import *
 
-####################### README ################################## 
-# Make this script executable using command -                   #
-# $ chmod a+x pycon.py                                          #
-# and run this in terminal -                                    #
-# $ ./pycon.py                                                  #
-# or You can edit Main Menu in panel to add this script as new  #
-# item in Internet Menu. Refer your distribution's documentaion #
-# for details to do this.                                       #
-# See Configuraion options Section below.                       #
-##################### Good Luck !!! #############################
-
-################# Configuraion options Section ################## 
+############# Global Variables with default values ############### 
 # Set here your DNS server hostname or IP and port number
 dns_server = "10.24.0.2"      
 port = 6699
@@ -49,14 +39,16 @@ passwd   = "net4india"
 mac_addr = "00-24-E8-81-C9-XX"
 # Set this for debug messages on terminal
 debug = False    # True / False
-#################################################################
-
-# Global Variables
+# Another Global Variables
 server_response = "Init ##@@## NA ##@@## NA ##@@## NA ##@@## NA ##@@## NA"
 session_info = "Init ##@@## NA ##@@## NA ##@@## NA ##@@## NA ##@@## NA"
 session_id = ""
 threadquit = 0
 is_connected = 0
+main_dir = os.path.abspath(os.path.dirname(sys.argv[0]))
+PIXMAPS_DIR = ""
+#################################################################
+
 
 # Enable threading with gtk
 gtk.gdk.threads_init()
@@ -244,7 +236,7 @@ class refresh(Thread):
 		time.sleep(3)
 		gtk.gdk.threads_enter()
 		self.nc.push_status(self.widget, self.ctx_id, "Status : Online")
-		self.nc.icon.set_from_stock(gtk.STOCK_NETWORK)
+		self.nc.icon.set_from_file(os.path.join(PIXMAPS_DIR,'pycon_64.png'))
 		gtk.gdk.threads_leave()
 
 		refresh_str = "reqType=refresh##@@##sessionID=" + session_id + "##@@##dummy=dummyone" + chr(10)
@@ -280,11 +272,11 @@ class refresh(Thread):
 				conn_status = ("Offline", "Online")[is_connected]
 				gtk.gdk.threads_enter()
 				self.nc.push_status(self.widget, self.ctx_id, "Status : %s" % conn_status)
-				self.nc.icon.set_from_stock(gtk.STOCK_NETWORK)
+				self.nc.icon.set_from_file(os.path.join(PIXMAPS_DIR,'pycon_64.png'))
 				self.nc.icon.set_blinking(False)
 				gtk.gdk.threads_leave()
 
-			# Update tooltip
+			# Update tooltip each time connection is refreshed
 			conn_status = ("Offline", "Online")[is_connected]
 			self.nc.icon.set_tooltip("Net4India - " + conn_status 
 					+ "\n Inbound : " + session_info.split("##@@##")[4]
@@ -299,14 +291,45 @@ class refresh(Thread):
 		# Invalidate session id
 		session_id = ""
 		is_connected = 0
+		# Update tooltip before exiting the thread
+		conn_status = ("Offline", "Online")[is_connected]
+		self.nc.icon.set_tooltip("Net4India - " + conn_status 
+				+ "\n Inbound : " + session_info.split("##@@##")[4]
+				+ "\n Outbound: " + session_info.split("##@@##")[5] )
+
 		threadquit = 0
+		
 		if debug : print "refresh thread : Thread Quit !!! " 
 		return 
+
+# Function to Save Credentials
+def save_creds(user, passwd, ip_port, mac):
+	if debug : print "I am in save_creds"
+	
+	dir_path = os.environ['HOME']
+	if dir_path :
+		file_path = os.path.join(dir_path, ".pycon.db")
+	else :
+		file_path = os.path.join(os.curdir, ".pycon.db")
+		
+	if debug : print "init : File Path - " + file_path
+
+	try:
+		pycon_db = shelve.open(file_path, "n")
+		pycon_db['user'] = user
+		pycon_db['passwd'] = passwd
+		pycon_db['ip_port'] = ip_port
+		pycon_db['mac'] = mac
+		pycon_db.close()
+	except :
+		if debug : print "save_creds : Couldn't save credentials !" 
+	return 
 
 # Function to show a Dialog Message
 def message(title=None, type=gtk.MESSAGE_INFO, buttons=gtk.BUTTONS_OK, data=None):
 	msg = gtk.MessageDialog(None, gtk.DIALOG_MODAL, type, buttons, data)
 	msg.set_title(title)
+	msg.set_position(gtk.WIN_POS_CENTER_ALWAYS)
 	response = msg.run()
 	msg.destroy()
 	return response
@@ -321,7 +344,7 @@ def show_status(data=None):
 	message(title="Session Info", data="\nStatus\t\t:\t" + conn_status 		
 			+ "\nLogin Time\t:\t" + session_info.split("##@@##")[2] 
 			+ "\nInbound Data\t:\t" + session_info.split("##@@##")[4]  
-			+ "\nOutbound Data\t:\t" + session_info.split("##@@##")[5])
+			+ "\nOutbound Data :\t" + session_info.split("##@@##")[5])
 	return
 
 # Function invoked for options in popup menu  
@@ -349,7 +372,8 @@ MA 02111-1307, USA."""
 		dialog = gtk.AboutDialog()
 		dialog.set_name("Connector")
 		dialog.set_version("0.1")
-		pixbuf = dialog.render_icon(gtk.STOCK_NETWORK, gtk.ICON_SIZE_DIALOG)
+		dialog.set_position(gtk.WIN_POS_CENTER_ALWAYS)
+		pixbuf = gtk.gdk.pixbuf_new_from_file(os.path.join(PIXMAPS_DIR, 'pycon_64.png'))
 		dialog.set_logo(pixbuf)
 		dialog.set_comments("Net4India Broadband Connector")
 		dialog.set_copyright(u"Copyright © 2010 Anuj Aggarwal")
@@ -383,10 +407,12 @@ def make_right_menu(self, event_button, event_time):
 
 	status_item = gtk.ImageMenuItem(gtk.STOCK_INFO, agr)
 	about_item = gtk.ImageMenuItem(gtk.STOCK_ABOUT, agr)
+        menu_sep = gtk.SeparatorMenuItem()
 	close_item = gtk.ImageMenuItem(gtk.STOCK_QUIT, agr)
 
 	menu.append(status_item)
 	menu.append(about_item)
+	menu.append(menu_sep)
 	menu.append(close_item)
 
 	status_item.connect_object("activate", menu_callback , "status")
@@ -395,6 +421,7 @@ def make_right_menu(self, event_button, event_time):
 
 	status_item.show()
 	about_item.show()
+	menu_sep.show()
 	close_item.show()
 
 	menu.popup(None, None, None, event_button, event_time)
@@ -425,10 +452,19 @@ class NetConnect:
 	   self.window.show()
 	   return
 
+# Callback for Check button
+   def remember_creds(self, widget):
+	   if debug : print "I am in remember_creds"
+	   self.savecreds = (False, True)[widget.get_active()]
+	   if debug : print "remember_creds : ", self.savecreds
+	   return 
+
 # Callback for Connect button
    def connect(self, widget, ctx_id, data):
            global is_connected
 	   global threadquit
+	   global dns_server
+	   global port
 	   if debug : print "Connect Clicked!"
 
 	   # If already connected just return
@@ -438,12 +474,20 @@ class NetConnect:
 		return 
 	   
     	   # Wait until last thread is quit (if it was already running)
-	   while threadquit : pass 	
+	   while threadquit : pass
 
 	   # Get the credentials
-           user_name = self.uentry.get_text()
-           password = self.pentry.get_text()
+           user_name   = self.uentry.get_text()
+           password    = self.pentry.get_text()
+           ip_port     = self.ipentry.get_text()
            mac_address = self.mentry.get_text()
+
+           dns_server = ip_port.split(":")[0]
+           port       = ip_port.split(":")[1]
+	   
+	   # Save Credentials if requested
+	   if self.savecreds:
+		   save_creds(user_name, password, ip_port, mac_address)
 
 	   # Make connect request
 	   if netconnect(user_name,password,mac_address):
@@ -496,17 +540,48 @@ class NetConnect:
       global login_id
       global passwd
       global mac_addr
+      global main_dir
+      global PIXMAPS_DIR
       self.count = 1
+      self.savecreds = False
+
+# Find and Set Path of pixmaps
+      if not os.path.exists(os.path.join(main_dir, 'share')):
+	      main_dir = os.path.abspath(os.path.join(main_dir, os.path.pardir))
+	      PIXMAPS_DIR = os.path.join(main_dir, "share", "pixmaps", "pycon")
 
 # Create a new window
       self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-      wicon = self.window.render_icon(gtk.STOCK_NETWORK, gtk.ICON_SIZE_MENU)
+      wicon = gtk.gdk.pixbuf_new_from_file(os.path.join(PIXMAPS_DIR, 'pycon_32.png'))
       gtk.window_set_default_icon(wicon)
-      self.window.set_size_request(250, 150)
+      self.window.set_position(gtk.WIN_POS_CENTER_ALWAYS)
       self.window.set_title("Net4India  Connector")
       self.window.set_border_width(5)
       self.window.connect("delete_event", self.on_delete_event) 
 
+# Load the Credentials if already saved, Otherwise use default
+      dir_path = os.environ['HOME']
+      if dir_path :
+	      file_path = os.path.join(dir_path, ".pycon.db")
+      else :
+	      file_path = os.path.join(os.curdir, ".pycon.db")
+
+      if debug : print "init : File Path - " + file_path
+
+      try :
+	      creds_db = shelve.open(file_path,"r")
+	      if (creds_db):
+		      login_id = creds_db['user']
+		      passwd = creds_db['passwd']
+		      ip_port = creds_db['ip_port']
+		      mac_addr = creds_db['mac']
+		      creds_db.close()
+	      else:
+		      ip_port = dns_server+":"+str(port)
+      except:
+	      if debug : print "init : 'creds.n4i' file doesn't exist! Loading default values"
+	      ip_port = dns_server+":"+str(port)
+	
 # Create Stausbar
       self.status_bar = gtk.Statusbar()
       context_id = self.status_bar.get_context_id("Connector")
@@ -522,13 +597,14 @@ class NetConnect:
       uhbox.show()
 
       ulabel = gtk.Label("Login ID :")
-      uhbox.pack_start(ulabel, True, True, 0)
+      ulabel.set_alignment(0,0.5)
+      uhbox.pack_start(ulabel, True, True, 5)
       ulabel.show()
 
       self.uentry = gtk.Entry(0)
       self.uentry.set_text(login_id)
       self.uentry.set_tooltip_text("Enter user name")
-      uhbox.pack_start(self.uentry, False, True, 0)
+      uhbox.pack_start(self.uentry, False, False, 0)
       self.uentry.show()
 
 # Password text entry
@@ -537,37 +613,66 @@ class NetConnect:
       phbox.show()
 
       plabel = gtk.Label("Password :")
-      phbox.pack_start(plabel, True, True, 0)
+      plabel.set_alignment(0,0.5)
+      phbox.pack_start(plabel, True, True, 5)
       plabel.show()
 
       self.pentry = gtk.Entry(0)
       self.pentry.set_visibility(False)
       self.pentry.set_text(passwd)
       self.pentry.set_tooltip_text("Enter password")
-      phbox.pack_start(self.pentry, False, True, 0)
+      phbox.pack_start(self.pentry, False, False, 0)
       self.pentry.show()
+
+# IP and Port text entry
+      iphbox = gtk.HBox(False,1)
+      vbox.pack_start(iphbox, True, True, 0)
+      iphbox.show()
+
+      iplabel = gtk.Label("DNS Server :")
+      iplabel.set_alignment(0,0.5)
+      iphbox.pack_start(iplabel, True, True, 5)
+      iplabel.show()
+
+      self.ipentry = gtk.Entry(0)
+      self.ipentry.set_text(ip_port)
+      self.ipentry.set_tooltip_text("IP Address:Port e.g. 10.24.0.2:6699")
+      iphbox.pack_start(self.ipentry, False, False, 0)
+      self.ipentry.show()
 
 # MAC Address text entry
       mhbox = gtk.HBox(False,1)
       vbox.pack_start(mhbox, True, True, 0)
       mhbox.show()
 
-      mlabel = gtk.Label("MAC :")
-      mhbox.pack_start(mlabel, True, True, 0)
+      mlabel = gtk.Label("MAC Address :")
+      mlabel.set_alignment(0,0.5)
+      mhbox.pack_start(mlabel, True, True, 5)
       mlabel.show()
-
 
       self.mentry = gtk.Entry(0)
       self.mentry.set_text(mac_addr)
-      self.mentry.set_tooltip_text("Enter MAC address")
-      mhbox.pack_start(self.mentry, False, True, 0)
+      self.mentry.set_tooltip_text("MAC Address e.g. 00-24-E8-81-C9-90")
+      mhbox.pack_start(self.mentry, False, False, 0)
       self.mentry.show()
 
+# Check Button
+      chk_button = gtk.CheckButton("_Remember Me", True)
+      vbox.pack_start(chk_button, True, True, 0)
+      chk_button.connect("toggled", self.remember_creds)
+      chk_button.show()
+
+# Horizontal Separator
+      hsep = gtk.HSeparator()
+      vbox.pack_start(hsep, True, True, 0)
+      hsep.show()
+
+# Buttons
       bhbox = gtk.HBox(False,1)
       vbox.pack_start(bhbox, True, True, 0)
       bhbox.show()
 
-# Connect button
+#  Connect Button
       button = gtk.Button(None)
       cbhbox = gtk.HBox(False,0)
       button.add(cbhbox)
@@ -588,7 +693,7 @@ class NetConnect:
       bhbox.pack_start(button, True, True, 2)
       button.show()
 
-# Disconnect Button
+#  Disconnect Button
       button = gtk.Button(label=None)
       dbhbox = gtk.HBox(False,0)
       button.add(dbhbox)

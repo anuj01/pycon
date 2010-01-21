@@ -1,0 +1,17 @@
+#!/usr/bin/env xdg-open
+
+[Desktop Entry]
+Encoding=UTF-8
+Name=Net4India Connector
+Name[en_US]=Net4India Connector
+Name[en_IN]=Net4India Connector
+Version=0.1
+Icon=pycon.xpm
+Icon[en_US]=pycon.xpm
+Icon[en_IN]=pycon.xpm
+Type=Application
+Terminal=false
+Exec=pycon
+Comment=Net4India Broadband Connector 
+Comment[en_US]=Net4India Broadband Connector
+Categeory=Application;Network;
